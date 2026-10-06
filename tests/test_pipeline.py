@@ -87,6 +87,18 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(len(posts), 1)
         self.assertIn("order flow", posts[0].items[0].tags)
 
+    def test_podcast_feed_with_shared_link(self):
+        scfg = {"kind": "video/podcast", "section": "Podcast", "max_tags": 0}
+        posts = parse_wordpress(feed("podcast.xml"), scfg)
+        urls = [p.items[0].source_url for p in posts]
+        self.assertEqual(len(set(urls)), 3, urls)                       # her bölüm ayrı kayıt
+        self.assertTrue(urls[0].endswith("s7e34.mp3"))
+        self.assertIn("ep=zz-11", urls[2])                              # ses dosyası yoksa bölüm kimliği
+        self.assertEqual({p.items[0].kind for p in posts}, {"video/podcast"})
+        self.assertEqual(posts[0].items[0].tags, [])
+        from qin.cluster import canonical_url
+        self.assertEqual(len({canonical_url(u) for u in urls}), 3)       # kümeleme bölümleri birleştirmez
+
     def test_reddit(self):
         it = parse_reddit(feed("reddit.xml"))[0].items[0]
         self.assertEqual(it.origin, "u/someone")
@@ -300,8 +312,11 @@ class PipelineTest(unittest.TestCase):
             self.assertGreaterEqual(merged[0]["p"], 20)
             reddit = next(i for i in items if i["src"] == ["reddit_algotrading"])
             self.assertTrue(reddit.get("tool"))
-            self.assertEqual({s["id"] for s in manifest["sources"]}, set(sources))
-            self.assertTrue(all(1 <= s["slot"] <= 8 for s in manifest["sources"]))
+            listed = {s["id"]: s for s in manifest["sources"]}
+            self.assertTrue(set(sources) <= set(listed))                 # içeriği olan her kaynak listede
+            on = [s for s in listed.values() if cfg["sources"].get(s["id"], cfg["arxiv"]).get("enabled", True)]
+            self.assertEqual(len({s["slot"] for s in on}), len(on))      # etkin kaynakların renkleri çakışmaz
+            self.assertTrue(all(1 <= s["slot"] <= 8 for s in listed.values()))
 
             md, html = write_digest(db, cfg, days=3650)
             text = md.read_text(encoding="utf-8")

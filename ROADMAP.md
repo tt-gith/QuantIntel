@@ -64,7 +64,9 @@ olmazsa o kaynağı yerel bilgisayar besler.
 - İçerik site hazır olunca kararlaştırılacak. Gönderim: günlük iş akışından, ücretsiz bir e-posta servisiyle.
 
 ### Sürekli iyileştirme listesi
-- Sessiz görünen kaynakların (Systematic Traders, OpenQuant) yerine ya da yanına yenileri.
+- Kaynak listesi: Systematic Traders ve OpenQuant duraklatıldı (aylardır yeni sayı yok, ayrıca substack.com
+  adresleri GitHub sunucularını engelliyor). Yerlerine IBKR Quant, Top Traders Unplugged ve
+  Flirting with Models eklendi. Etkinlik ve sektör haberi için hâlâ iyi bir kaynak aranıyor.
 - Yeni popülerlik ölçümleri: YouTube görüntülenme, Substack beğenileri.
 - Etkinlikler için gerçek etkinlik tarihi ve takvim görünümü.
 - Konu etiketlerinin iyileştirilmesi; araç sinyalinin yanlış pozitiflerinin azaltılması.

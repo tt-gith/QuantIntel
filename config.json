@@ -20,16 +20,18 @@
       "url": "http://feeds.feedburner.com/Quantocracy"
     },
     "systematic_traders": {
-      "enabled": true,
+      "enabled": false,
       "label": "Systematic Traders",
       "type": "substack",
-      "url": "https://systematictraders.substack.com/feed"
+      "url": "https://systematictraders.substack.com/feed",
+      "note": "Ağustos 2026'dan beri yeni sayı yok; ayrıca substack.com adresleri GitHub sunucularını engelliyor."
     },
     "openquant": {
-      "enabled": true,
+      "enabled": false,
       "label": "OpenQuant",
       "type": "substack",
-      "url": "https://openquant.substack.com/feed"
+      "url": "https://openquant.substack.com/feed",
+      "note": "Temmuz 2026'dan beri yeni sayı yok; ayrıca substack.com adresleri GitHub sunucularını engelliyor."
     },
     "quantpedia": {
       "enabled": true,
@@ -40,6 +42,31 @@
         "Premium Update",
         "Premium Post"
       ]
+    },
+    "ibkr_quant": {
+      "enabled": true,
+      "label": "IBKR Quant",
+      "type": "rss",
+      "url": "https://ibkrcampus.com/campus/category/ibkr-quant-news/feed/",
+      "max_tags": 4
+    },
+    "top_traders_unplugged": {
+      "enabled": true,
+      "label": "Top Traders Unplugged",
+      "type": "rss",
+      "kind": "video/podcast",
+      "section": "Podcast",
+      "url": "https://feeds.captivate.fm/top-traders-unplugged/",
+      "max_tags": 0
+    },
+    "flirting_with_models": {
+      "enabled": true,
+      "label": "Flirting with Models",
+      "type": "rss",
+      "kind": "video/podcast",
+      "section": "Podcast",
+      "url": "https://feeds.captivate.fm/flirting-with-models/",
+      "max_tags": 0
     },
     "reddit_algotrading": {
       "enabled": true,

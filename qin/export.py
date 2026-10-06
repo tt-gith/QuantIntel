@@ -44,13 +44,16 @@ def _source_defs(cfg: dict) -> list[tuple[str, str]]:
     return out
 
 
-def _source_slots(db: DB, source_ids: list[str]) -> dict[str, int]:
-    """Her kaynağa kalıcı bir renk yuvası verir: renk kaynağa aittir, sırasına değil."""
+def _source_slots(db: DB, source_ids: list[str], active: set[str]) -> dict[str, int]:
+    """Her kaynağa kalıcı bir renk yuvası verir: renk kaynağa aittir, sırasına değil.
+    Yeni kaynak, etkin kaynakların kullanmadığı en küçük yuvayı alır (kapatılan kaynağın rengi boşa çıkar)."""
     slots = json.loads(db.get_meta("source_slots", "{}"))
     changed = False
     for sid in source_ids:
         if sid not in slots:
-            slots[sid] = len(slots) % PALETTE_SLOTS + 1
+            used = {slots[s] for s in active if s in slots}
+            free = [n for n in range(1, PALETTE_SLOTS + 1) if n not in used]
+            slots[sid] = free[0] if free else len(slots) % PALETTE_SLOTS + 1
             changed = True
     if changed:
         db.set_meta("source_slots", json.dumps(slots))
@@ -192,7 +195,12 @@ def export_site(db: DB, cfg: dict, out_dir: Path | None = None, password: str | 
             old.unlink()
 
     defs = _source_defs(cfg)
-    slots = _source_slots(db, [sid for sid, _ in defs])
+    def enabled(sid: str) -> bool:
+        return (cfg["arxiv"] if sid == "arxiv" else cfg["sources"][sid]).get("enabled", True)
+
+    # Etkin kaynaklar önce yuva alır; kapalı olanlar renkleri tüketmez
+    order = sorted((sid for sid, _ in defs), key=lambda sid: not enabled(sid))
+    slots = _source_slots(db, order, {sid for sid, _ in defs if enabled(sid)})
     fetch = {f["source"]: f for f in db.last_fetch_per_source()}
     counts: dict[str, int] = defaultdict(int)
     last: dict[str, str] = {}
@@ -204,8 +212,7 @@ def export_site(db: DB, cfg: dict, out_dir: Path | None = None, password: str | 
     sources = []
     for sid, label in defs:
         f = fetch.get(sid)
-        enabled = cfg["arxiv"].get("enabled", True) if sid == "arxiv" else cfg["sources"][sid].get("enabled", True)
-        if not enabled and not counts.get(sid):
+        if not enabled(sid) and not counts.get(sid):
             continue
         sources.append({
             "id": sid, "label": label, "slot": slots[sid], "n": counts.get(sid, 0),

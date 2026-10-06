@@ -239,19 +239,35 @@ def parse_substack(feed, scfg: dict | None = None) -> list[Post]:
 # WordPress (Quantpedia): her kayıt bir blog yazısı
 # ======================================================================
 def parse_wordpress(feed, scfg: dict | None = None) -> list[Post]:
-    skip = [s.lower() for s in (scfg or {}).get("skip_title_patterns", [])]
+    """Her kayıt tek öğe: blog yazısı ya da podcast bölümü.
+
+    Kaynak ayarları: skip_title_patterns (atlanacak başlıklar), kind (tür; ör. "video/podcast"),
+    section (bölüm adı).
+    """
+    scfg = scfg or {}
+    skip = [s.lower() for s in scfg.get("skip_title_patterns", [])]
+    # Bazı podcast beslemelerinde tüm bölümlerin linki ana sayfadır; o zaman bölümü ayırt eden adres gerekir
+    link_counts: dict[str, int] = {}
+    for e in feed.entries:
+        link_counts[e.get("link", "")] = link_counts.get(e.get("link", ""), 0) + 1
     posts = []
     for e in feed.entries:
         title = clean(e.get("title", ""))
         if any(s in title.lower() for s in skip):
             continue
         post = _base_post(e)
+        link = e.get("link") or ""
+        if not link or link_counts.get(link, 0) > 1:
+            audio = next((x.get("href") for x in e.get("enclosures", []) if x.get("href")), None)
+            guid = re.sub(r"[^A-Za-z0-9_-]", "", e.get("id", "") or title)[:60]
+            link = audio or (f"{link}{'&' if '?' in link else '?'}ep={guid}" if link else "")
         wp_tags = [clean(t.get("term", "")) for t in e.get("tags", [])]
         wp_tags = [t for t in wp_tags if t and t.lower() not in ("uncategorized", "own-research")]
         post.items.append(Item(
-            title=title, source_url=e.get("link"), origin=clean(e.get("author", "")) or None,
-            section="Blog", summary=shorten(html_to_text(e.get("summary", "")), 900),
-            published=post.published, tags=wp_tags[:6],
+            title=title, source_url=link, origin=clean(e.get("author", "")) or None,
+            section=scfg.get("section", "Blog"), kind=scfg.get("kind"),
+            summary=shorten(html_to_text(e.get("summary", "")), 900),
+            published=post.published, tags=wp_tags[:scfg.get("max_tags", 6)],
         ))
         posts.append(post)
     return posts
