@@ -1,0 +1,78 @@
+{
+  "db_path": "data/quant_intel.db",
+  "digest_dir": "digests",
+  "log_dir": "logs",
+  "lookback_days": 7,
+  "site_port": 8765,
+  "user_agent": "windows:quant-intel-network:1.0 (personal RSS reader)",
+  "resolve_quantocracy_redirects": true,
+  "sources": {
+    "quantseeker": {
+      "enabled": true,
+      "label": "QuantSeeker",
+      "type": "substack",
+      "url": "https://www.quantseeker.com/feed"
+    },
+    "quantocracy": {
+      "enabled": true,
+      "label": "Quantocracy",
+      "type": "quantocracy",
+      "url": "http://feeds.feedburner.com/Quantocracy"
+    },
+    "systematic_traders": {
+      "enabled": true,
+      "label": "Systematic Traders",
+      "type": "substack",
+      "url": "https://systematictraders.substack.com/feed"
+    },
+    "openquant": {
+      "enabled": true,
+      "label": "OpenQuant",
+      "type": "substack",
+      "url": "https://openquant.substack.com/feed"
+    },
+    "quantpedia": {
+      "enabled": true,
+      "label": "Quantpedia",
+      "type": "wordpress",
+      "url": "https://quantpedia.com/feed/",
+      "skip_title_patterns": [
+        "Premium Update",
+        "Premium Post"
+      ]
+    },
+    "reddit_algotrading": {
+      "enabled": true,
+      "label": "r/algotrading",
+      "type": "reddit",
+      "url": "https://www.reddit.com/r/algotrading/top/.rss?t=week"
+    }
+  },
+  "arxiv": {
+    "enabled": true,
+    "label": "arXiv q-fin",
+    "max_results_per_query": 40,
+    "categories": [
+      "q-fin.TR",
+      "q-fin.PM",
+      "q-fin.ST",
+      "q-fin.CP",
+      "q-fin.RM",
+      "q-fin.MF"
+    ],
+    "queries": {
+      "LLM ve AI ajanlari": "abs:\"large language model\" OR abs:LLM OR abs:LLMs OR abs:agentic",
+      "Reinforcement learning": "abs:\"reinforcement learning\"",
+      "Mikroyapi ve emir defteri": "abs:\"market microstructure\" OR abs:\"limit order book\" OR abs:\"order flow\"",
+      "Execution ve piyasa etkisi": "abs:\"optimal execution\" OR abs:\"market impact\"",
+      "Backtest ve overfitting": "abs:backtest OR abs:backtesting OR abs:overfitting"
+    }
+  },
+  "metrics": {
+    "citations": {
+      "enabled": true,
+      "max_age_days": 365,
+      "refresh_days": 3
+    }
+  }
+}

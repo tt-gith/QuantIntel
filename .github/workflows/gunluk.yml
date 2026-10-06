@@ -1,0 +1,128 @@
+# Her gün kaynakları çeker, arşivi günceller ve siteyi GitHub Pages'te yayınlar.
+# Elle çalıştırmak için: GitHub > Actions > "Günlük çekme ve yayın" > Run workflow
+name: Günlük çekme ve yayın
+
+on:
+  schedule:
+    - cron: "17 5 * * *"        # her gün 08:17 (İstanbul). GitHub birkaç dakika geciktirebilir.
+  workflow_dispatch:            # elle çalıştırma düğmesi
+  push:
+    branches: [main]            # kod değişince siteyi hemen yenile
+    paths: ["qin/**", "site/**", "config.json", "requirements.txt", ".github/workflows/**"]
+
+permissions:
+  contents: write               # şifreli arşivi Releases'e yazmak için
+  pages: write                  # siteyi yayınlamak için
+  id-token: write
+  actions: write                # zamanlamanın durmaması için (son adım)
+
+concurrency:
+  group: gunluk                 # aynı anda tek çalışma: arşiv iki kez yazılmasın
+  cancel-in-progress: false
+
+env:
+  ARSIV_ETIKETI: arsiv
+  GH_TOKEN: ${{ github.token }}
+  # Site ve arşiv bu parolayla şifrelenir (Settings > Secrets and variables > Actions > SITE_SIFRESI)
+  QIN_SITE_PASSWORD: ${{ secrets.SITE_SIFRESI }}
+  QIN_SITE_PASSWORD_OLD: ${{ secrets.SITE_SIFRESI_ESKI }}   # yalnızca parola değiştirirken
+  QIN_REQUIRE_PASSWORD: "1"     # parolasız (şifresiz) veri asla yayınlanmaz
+  SAY: import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute("select count(*) from items").fetchone()[0])
+
+jobs:
+  cek-ve-yayinla:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.yayin.outputs.page_url }}
+    steps:
+      - name: Parola tanımlı mı?
+        id: hazir
+        run: |
+          if [ -z "$QIN_SITE_PASSWORD" ]; then
+            echo "::notice::SITE_SIFRESI henüz tanımlı değil; hiçbir şey yapılmadı. YAYIN.md 2. adıma bakın."
+            echo "tamam=hayir" >> "$GITHUB_OUTPUT"
+          elif [ "${#QIN_SITE_PASSWORD}" -lt 12 ]; then
+            echo "::error::SITE_SIFRESI en az 12 karakter olmalı (dört beş kelimelik bir cümle kullan)."
+            exit 1
+          else
+            echo "tamam=evet" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        if: steps.hazir.outputs.tamam == 'evet'
+
+      - uses: actions/setup-python@v6
+        if: steps.hazir.outputs.tamam == 'evet'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Paketleri kur ve test et
+        if: steps.hazir.outputs.tamam == 'evet'
+        run: |
+          pip install -r requirements.txt
+          python -m unittest discover tests
+
+      # Arşiv (SQLite) depoda değil, "arsiv" adlı Release'in ekinde ŞİFRELİ durur (depo herkese açık).
+      # Release varsa dosya inmek ve açılmak ZORUNDA: olmazsa iş durur, boş bir arşiv eskisinin üzerine yazılmaz.
+      - name: Arşivi indir ve aç
+        if: steps.hazir.outputs.tamam == 'evet'
+        run: |
+          mkdir -p data
+          if gh release view "$ARSIV_ETIKETI" >/dev/null 2>&1; then
+            gh release download "$ARSIV_ETIKETI" --pattern quant_intel.db.enc --dir data --clobber
+            python run.py vault open data/quant_intel.db.enc data/quant_intel.db
+            cp data/quant_intel.db data/onceki.db
+            echo "Arşiv açıldı: $(python -c "$SAY" data/quant_intel.db) öğe"
+          else
+            echo "Arşiv henüz yok: ilk çalıştırma, sıfırdan başlanıyor."
+          fi
+
+      - name: Kaynakları çek ve şifreli site verisini üret
+        if: steps.hazir.outputs.tamam == 'evet'
+        run: |
+          python run.py fetch
+          test -f site/data/lock.json                 # veri şifreli üretilmiş olmalı
+          test ! -e site/data/manifest.json           # düz veri kalmamalı
+
+      - name: Arşivi şifrele ve kaydet
+        if: steps.hazir.outputs.tamam == 'evet'
+        run: |
+          yeni=$(python -c "$SAY" data/quant_intel.db)
+          eski=0
+          [ -f data/onceki.db ] && eski=$(python -c "$SAY" data/onceki.db)
+          echo "Öğe sayısı: $eski -> $yeni"
+          if [ "$yeni" -lt "$eski" ]; then
+            echo "::error::Arşiv küçüldü ($eski -> $yeni); kaydedilmedi."
+            exit 1
+          fi
+          gh release view "$ARSIV_ETIKETI" >/dev/null 2>&1 || gh release create "$ARSIV_ETIKETI" \
+            --title "Arşiv (şifreli)" --notes "Günlük iş akışının kullandığı şifreli arşiv. Elle silmeyin."
+          # Bir önceki günün kopyası: bir şey ters giderse geri dönülebilir
+          if [ -f data/quant_intel.db.enc ]; then
+            cp data/quant_intel.db.enc data/onceki.db.enc
+            gh release upload "$ARSIV_ETIKETI" data/onceki.db.enc --clobber
+          fi
+          python run.py vault seal data/quant_intel.db data/quant_intel.db.enc
+          gh release upload "$ARSIV_ETIKETI" data/quant_intel.db.enc --clobber
+
+      - uses: actions/configure-pages@v5
+        if: steps.hazir.outputs.tamam == 'evet'
+
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.hazir.outputs.tamam == 'evet'
+        with:
+          path: site
+
+      - name: Siteyi yayınla
+        id: yayin
+        if: steps.hazir.outputs.tamam == 'evet'
+        uses: actions/deploy-pages@v4
+
+      # GitHub, depoda 60 gün değişiklik olmazsa zamanlanmış çalışmayı durdurur; bu adım sayacı sıfırlar.
+      - name: Zamanlamayı canlı tut
+        if: steps.hazir.outputs.tamam == 'evet'
+        continue-on-error: true
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/gunluk.yml/enable"

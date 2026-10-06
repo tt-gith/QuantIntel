@@ -1,0 +1,8 @@
+# Yerel ortam ve üretilen dosyalar (depoya girmez; bulutta her çalışmada yeniden üretilir)
+.venv/
+__pycache__/
+/data/
+/logs/
+/digests/
+/site/data/*
+!/site/data/.gitkeep

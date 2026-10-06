@@ -1,0 +1,55 @@
+/* Tasarım değişkenleri. Renk, yazı ve ölçü kararlarının tek adresi burası:
+   bir değeri değiştirmek tüm siteye yansır. */
+:root {
+  /* Yüzeyler: uzay boşluğundan gövde panellerine */
+  --void: #05070f;
+  --hull: #0b1020;
+  --hull-2: #101730;
+  --line: #1f2a48;
+  --line-soft: #151e37;
+
+  /* Metin */
+  --text: #e9edf7;
+  --text-2: #aab3cc;
+  --muted: #77819e;
+
+  /* Gösterge ışıkları: arayüzün kendi vurguları (kaynak renklerinden daha açık tonlar) */
+  --phosphor: #ffcf87;        /* etkin durum, saat, grafik */
+  --phosphor-dim: #b98f52;
+  --ion: #8fc3ff;             /* bağlantı, odak */
+
+  /* Durum (yalnızca kaynak sağlığı için; her zaman metinle birlikte) */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #e05252;
+
+  /* Kaynak renkleri: sabit sıra, koyu yüzeyde renk körlüğü denetiminden geçti.
+     Her kaynağın yuvası veritabanında kalıcıdır; 8'den fazla kaynakta yuvalar yeniden kullanılır
+     ve ayrım kaynağın adıyla yapılır. */
+  --src-1: #3987e5;
+  --src-2: #d95926;
+  --src-3: #199e70;
+  --src-4: #c98500;
+  --src-5: #d55181;
+  --src-6: #008300;
+  --src-7: #9085e9;
+  --src-8: #e66767;
+
+  /* Yazı */
+  --font-display: "Chakra Petch", "Bahnschrift", "DIN Alternate", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-base: 0.9375rem;
+  --fs-md: 1.0625rem;
+  --fs-lg: 1.375rem;
+  --fs-xl: clamp(1.5rem, 1.1rem + 1.6vw, 2.25rem);
+
+  /* Ölçü */
+  --gutter: clamp(16px, 3vw, 40px);
+  --side-w: 264px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --top-h: 60px;
+}

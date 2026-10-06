@@ -1,0 +1,4 @@
+{"kind":"Listing","data":{"children":[
+ {"kind":"t3","data":{"name":"t3_abc","title":"I open-sourced my backtester","permalink":"/r/algotrading/comments/abc/x/","author":"someone","selftext":"I open-sourced my event-driven backtesting library in Rust.","created_utc":1790935200,"score":612,"num_comments":143,"stickied":false}},
+ {"kind":"t3","data":{"name":"t3_pin","title":"Weekly thread","permalink":"/r/algotrading/comments/pin/w/","author":"mod","selftext":"","created_utc":1790935200,"score":5,"num_comments":2,"stickied":true}}
+]}}
