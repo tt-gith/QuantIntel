@@ -1,4 +1,4 @@
-"""Komut satırı: fetch, export, serve, digest, weekly, search, mark, radar, stats, reparse."""
+"""Komut satırı: fetch, llm, export, serve, brief, sub, admin, digest, weekly, search, mark, radar, stats, reparse."""
 from __future__ import annotations
 
 import argparse
@@ -8,7 +8,7 @@ from logging.handlers import RotatingFileHandler
 
 from .common import load_config, shorten
 from .digest import write_digest
-from .export import SITE_DIR, export_site
+from .export import SITE_DIR, build_items, export_site
 from .fetch import fetch_all, make_session, reparse
 from .metrics import refresh_all
 from .storage import DB, STATUSES
@@ -77,6 +77,125 @@ def cmd_export(db, cfg, args):
     m = export_site(db, cfg)
     kip = "şifreli" if m.get("locked") else "şifresiz, yalnızca bu bilgisayar için"
     _say(f"Site verisi güncellendi: {m['total']} içerik, {len(m['months'])} ay ({kip})")
+
+
+def cmd_llm(db, cfg, args):
+    """Yeni içeriği Türkçeye çevirir ve dönemi gelen özetleri yazar. LLM'e ulaşılamazsa site yine güncellenir."""
+    import json
+
+    from .brief import generate_due
+    from .common import iso, now_utc
+    from .llm import LLM
+    from .translate import translate_pending
+
+    llm = LLM(cfg)
+    if not cfg.get("llm", {}).get("enabled", True):
+        _say("LLM: kapalı (config.json > llm.enabled)")
+        return
+    if not llm.providers:
+        _say("LLM: API anahtarı tanımlı değil; çeviri ve özet atlandı (bkz. YAYIN.md).")
+        return
+    lines = []
+    try:
+        items = build_items(db)
+        if not args.no_brief:                       # önce özet: kota biterse çeviri ertesi güne kalabilir
+            lines += generate_due(db, cfg, llm, items, only=args.brief, force=args.force)
+        if not args.no_translate:
+            lines.append(translate_pending(db, cfg, llm, items))
+    except Exception as ex:                         # LLM hatası günlük çalışmayı durdurmaz
+        logging.getLogger("qin").exception("LLM adımı yarıda kaldı")
+        lines.append(f"LLM adımı yarıda kaldı: {type(ex).__name__}")
+        llm.errors.append(f"{type(ex).__name__}: {str(ex)[:200]}")
+    for line in lines:
+        _say(line)
+    db.set_meta("llm_last", json.dumps({"at": iso(now_utc()), "calls": llm.calls, "model": llm.last_model,
+                                        "lines": lines, "errors": llm.errors[-6:]}, ensure_ascii=False))
+    cmd_export(db, cfg, args)
+
+
+def cmd_admin(db, cfg, args):
+    """Yönetim panelinden gelen şifreli komutu uygular (bulut iş akışı çağırır)."""
+    import os
+
+    from . import admin
+    payload = args.payload or os.environ.get("QIN_ADMIN_COMMAND", "")
+    result = {"ok": False}
+    try:
+        if payload.strip():
+            result = admin.apply(db, cfg, payload)
+            for line in result["public"]:           # e-posta adresleri ve özet metni günlüğe yazılmaz
+                _say(line)
+        else:
+            _say("Komut yok (QIN_ADMIN_COMMAND boş).")
+    finally:
+        cmd_export(db, cfg, args)                   # komut uygulanamasa da site verisi üretilir (yayın durmasın)
+    return 0 if result["ok"] else 3
+
+
+def cmd_brief(db, cfg, args):
+    from . import mailer
+    from .brief import manual_period, period_label
+    from .common import now_utc
+    from .private import Private
+
+    if args.action == "list":
+        for b in db.briefs(args.limit):
+            sent = f"gönderildi ({b['sent_to']})" if b["sent_at"] else "gönderilmedi"
+            print(f"#{b['id']:<4} {b['kind']:<7} {period_label(b['kind'], b['period']):<28} {b['origin']:<7} "
+                  f"{sent:<16} {shorten(b['title'], 70)}")
+        return
+    if args.action == "add":
+        from pathlib import Path
+        body = Path(args.file).read_text(encoding="utf-8-sig").strip()
+        title = args.title
+        if not title and body.startswith("# "):     # başlık verilmediyse dosyanın ilk satırı
+            title, _, body = body[2:].partition("\n")
+        if not title or not body.strip():
+            print("Başlık ve metin gerekli (--title ya da dosyanın ilk satırı '# Başlık').")
+            return 1
+        day = args.date or now_utc().strftime("%Y-%m-%d")
+        brief_id = db.save_brief(args.kind, manual_period(args.kind, day), "manual", title.strip(), body.strip())
+        print(f"Özet #{brief_id} eklendi.")
+    elif args.action == "delete":
+        print(f"#{args.id} silindi." if db.delete_brief(args.id) else f"#{args.id} bulunamadı.")
+    elif args.action == "send":
+        b = db.brief(args.id)
+        if not b:
+            print(f"#{args.id} bulunamadı.")
+            return 1
+        to = args.to or Private(db).subscribers
+        if not to:
+            print("Abone yok. Önce: qin sub add adres@ornek.com")
+            return 1
+        try:
+            sent, failed = mailer.send_brief(b, to, cfg)
+        except (RuntimeError, OSError) as ex:
+            print(f"Gönderilemedi: {ex}")
+            return 1
+        if sent and not args.to:
+            db.mark_brief_sent(b["id"], len(sent))
+        print(f"{len(sent)} adrese gönderildi." + "".join(f"\n  başarısız: {f}" for f in failed))
+    export_site(db, cfg)
+
+
+def cmd_sub(db, cfg, args):
+    from . import mailer
+    from .private import Private
+    private = Private(db)
+    if private.locked:
+        print("Abone kaydı başka bir yönetim parolasıyla şifreli; okunamadı.")
+        return 1
+    if args.action == "list":
+        print("\n".join(private.subscribers) if private.subscribers else "Abone yok.")
+        return
+    emails, bad = mailer.clean_emails(args.emails)
+    for e in bad:
+        print(f"Geçersiz adres: {e}")
+    change = private.add if args.action == "add" else private.remove
+    n = sum(1 for e in emails if change(e))
+    private.save()
+    print(f"{n} abone {'eklendi' if args.action == 'add' else 'çıkarıldı'} (toplam {len(private.subscribers)}).")
+    export_site(db, cfg)
 
 
 def cmd_reparse(db, cfg, args):
@@ -222,6 +341,40 @@ def main(argv=None) -> int:
 
     st = sub.add_parser("stats", help="Arşiv ve kaynak durumu")
     st.set_defaults(func=cmd_stats)
+
+    lm = sub.add_parser("llm", help="Yeni içeriği Türkçeye çevir, dönemi gelen özetleri yaz")
+    lm.add_argument("--brief", choices=["daily", "weekly"], help="Yalnızca bu özeti dene")
+    lm.add_argument("--force", action="store_true", help="Dönemin özeti varsa yeniden yaz")
+    lm.add_argument("--no-brief", action="store_true", help="Özet yazma, yalnızca çevir")
+    lm.add_argument("--no-translate", action="store_true", help="Çevirme, yalnızca özet yaz")
+    lm.set_defaults(func=cmd_llm)
+
+    br = sub.add_parser("brief", help="Özetler: listele, elle ekle, sil, abonelere gönder")
+    brs = br.add_subparsers(dest="action", required=True)
+    b1 = brs.add_parser("list")
+    b1.add_argument("--limit", type=int, default=30)
+    b2 = brs.add_parser("add", help="Markdown dosyasından özet ekle")
+    b2.add_argument("file")
+    b2.add_argument("--kind", choices=["daily", "weekly"], default="weekly")
+    b2.add_argument("--title")
+    b2.add_argument("--date", help="YYYY-AA-GG (varsayılan: bugün)")
+    b3 = brs.add_parser("delete")
+    b3.add_argument("id", type=int)
+    b4 = brs.add_parser("send", help="Özeti abonelere e-postayla gönder")
+    b4.add_argument("id", type=int)
+    b4.add_argument("--to", nargs="+", help="Aboneler yerine yalnızca bu adreslere (deneme)")
+    br.set_defaults(func=cmd_brief)
+
+    sb = sub.add_parser("sub", help="Aboneler: listele, ekle, çıkar")
+    sbs = sb.add_subparsers(dest="action", required=True)
+    sbs.add_parser("list")
+    for name in ("add", "remove"):
+        sbs.add_parser(name).add_argument("emails", nargs="+")
+    sb.set_defaults(func=cmd_sub)
+
+    ad = sub.add_parser("admin", help="Yönetim panelinin şifreli komutunu uygula (bulut iş akışı için)")
+    ad.add_argument("--payload", help="Varsayılan: QIN_ADMIN_COMMAND ortam değişkeni")
+    ad.set_defaults(func=cmd_admin)
 
     ex = sub.add_parser("export", help="Site verisini (site\\data) yeniden üret")
     ex.set_defaults(func=cmd_export)

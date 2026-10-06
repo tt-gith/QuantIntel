@@ -14,6 +14,7 @@ export const DEFAULT_RANGE = "7d";
 // Yeni sekme: buraya bir satır + i18n dosyalarına "tab.<id>" çevirisi.
 export const TABS = [
   { id: "all", test: (i) => i.k !== "iş ilanı" },        // akış: ilanlar hariç her şey
+  { id: "briefs", view: "briefs", test: () => false },   // günlük/haftalık özetler: liste yerine okuma görünümü
   { id: "papers", kinds: ["makale"] },
   { id: "posts", kinds: ["yazı"] },
   { id: "media", kinds: ["video/podcast"] },
@@ -47,6 +48,10 @@ export const SPOTLIGHT_GROUPS = [
   { label: "kind.haber", test: (i) => i.k === "haber" },
 ];
 export const SPOTLIGHT_SIZE = 5;     // bir büyük kart + dört satır
+
+// "LLM için dışa aktar": bir içeriğin özetinden en fazla kaç karakter alınacağı.
+export const EXPORT_SUMMARY_CHARS = 700;
+export const BRIEF_TEASER_DAYS = 8;  // güvertede "yeni özet" satırı bu kadar gün görünür
 
 export const SORTS = ["new", "pop"];
 export const PAGE_SIZE = 40;         // listede bir seferde gösterilen öğe

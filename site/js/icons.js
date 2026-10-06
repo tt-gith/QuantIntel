@@ -15,6 +15,14 @@ export const ICONS = {
   close: svg(`<path d="m4 4 8 8M12 4l-8 8"/>`),
   filter: svg(`<path d="M2.500 4h11M4.500 8h7M6.500 12h3"/>`),
   lock: svg(`<rect x="3.5" y="7.5" width="9" height="6" rx="1.2"/><path d="M5.5 7.5V5.5a2.5 2.5 0 0 1 5 0v2"/>`),
+  list: svg(`<path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.6" cy="4" r=".6"/><circle cx="2.6" cy="8" r=".6"/><circle cx="2.6" cy="12" r=".6"/>`),
+  export: svg(`<path d="M8 2.5v8M4.8 7.5 8 10.7l3.2-3.2M2.5 13.5h11"/>`),
+  copy: svg(`<rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/>`),
+  admin: svg(`<path d="M2.5 4.5h4M9.5 4.5h4M2.5 11.5h7M12.5 11.5h1"/><circle cx="8" cy="4.5" r="1.5"/><circle cx="11" cy="11.5" r="1.5"/>`),
+  mail: svg(`<rect x="2" y="3.5" width="12" height="9" rx="1.2"/><path d="m2.5 4.5 5.5 4.2 5.5-4.2"/>`),
+  edit: svg(`<path d="M10.8 2.8 13.2 5.2 5.4 13H3v-2.4z"/>`),
+  trash: svg(`<path d="M3 4.5h10M6.5 4.5v-2h3v2M4.5 4.5l.6 9h5.8l.6-9"/>`),
+  check: svg(`<path d="m3 8.5 3.2 3.2L13 4.8"/>`),
   tool: svg(`<path d="M9.500 2.500a3.200 3.200 0 0 0-3 4.300L2.500 10.800v2.700h2.700l4-4a3.200 3.200 0 0 0 4.300-3l-2 .700-1.700-1.700z"/>`),
 };
 

@@ -1,10 +1,12 @@
-"""Veritabanını sitenin okuduğu JSON dosyalarına aktarır.
+"""Veritabanını sitenin okuduğu dosyalara aktarır.
 
-site/data/manifest.json     kaynaklar, aylar, son çekme durumu
+site/data/manifest.json        kaynaklar, aylar, son çekme durumu
 site/data/items-YYYY-MM.json   o ayın içerikleri (kümelenmiş: her içerik bir kez)
+site/data/briefs.json          günlük ve haftalık özetler
 
-Site yalnızca bu dosyaları okur; veritabanına dokunmaz. Aynı dosyalar ileride
-bulutta da (GitHub Actions) üretilecek.
+Site yalnızca bu dosyaları okur; veritabanına dokunmaz. Site parolası tanımlıysa (yayındaki site)
+dosyalar şifreli yazılır (.bin) ve yanlarına lock.json konur; yönetim parolası da tanımlıysa
+yönetim paneli için admin.bin eklenir (bkz. qin/admin.py).
 """
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from . import vault
+from . import admin, vault
 from .cluster import cluster
 from .common import ROOT, iso, now_utc
 from .enrich import is_tool, source_tags, topics
@@ -112,6 +114,7 @@ def build_items(db: DB) -> list[dict]:
             "id": cid, "t": title, "u": tidy_url(url), "d": date, "k": kind, "src": srcs,
             "tg": topics(title, primary["summary"]),          # konu etiketleri (filtrelenebilir)
             "m": {k: int(v) for k, v in merged.items() if v},
+            "_seen": min(r["first_seen"] for r in members),   # arşive ilk giriş (siteye yazılmaz)
         }
         if extra:
             item["xt"] = extra[:6]                            # kaynağın kendi etiketleri
@@ -141,6 +144,24 @@ def build_items(db: DB) -> list[dict]:
         score = base + min(40, 20 * (len(i["src"]) - 1)) + (15 if i.get("hot") else 0)
         i["p"] = round(min(100, score))
     out.sort(key=lambda i: (i["d"], i["id"]), reverse=True)
+    return out
+
+
+def _public(item: dict) -> dict:
+    """Siteye yazılacak hali: alt çizgiyle başlayan alanlar yalnızca iç kullanım içindir."""
+    return {k: v for k, v in item.items() if not k.startswith("_")}
+
+
+def build_briefs(db: DB, limit: int | None = None) -> list[dict]:
+    out = []
+    for b in db.briefs(limit):
+        row = {"id": b["id"], "k": b["kind"], "per": b["period"], "o": b["origin"], "t": b["title"],
+               "b": b["body"], "c": b["created_at"]}
+        if b["updated_at"]:
+            row["up"] = b["updated_at"]
+        if b["sent_at"]:
+            row["sent"], row["n"] = b["sent_at"], b["sent_to"] or 0
+        out.append(row)
     return out
 
 
@@ -187,9 +208,19 @@ def export_site(db: DB, cfg: dict, out_dir: Path | None = None, password: str | 
     months = []
     for month in sorted(by_month, reverse=True):
         name = f"items-{month}.{ext}"
-        _write(out_dir / name, pack({"month": month, "items": by_month[month]}))
+        _write(out_dir / name, pack({"month": month, "items": [_public(i) for i in by_month[month]]}))
         months.append({"m": month, "n": len(by_month[month]), "file": name})
-    wanted = {m["file"] for m in months} | {f"manifest.{ext}", ".gitkeep"} | ({"lock.json"} if key else set())
+
+    briefs = build_briefs(db, cfg.get("llm", {}).get("briefs", {}).get("site_limit", 200))
+    _write(out_dir / f"briefs.{ext}", pack({"briefs": briefs}))
+
+    admin_pw = admin.admin_password() if key else None      # yönetim paneli yalnızca şifreli sitede vardır
+    if admin_pw:
+        admin.check(admin_pw, password)
+        _write(out_dir / "admin.bin", admin.bundle(db, cfg, key, admin_pw))
+
+    wanted = ({m["file"] for m in months} | {f"manifest.{ext}", f"briefs.{ext}", ".gitkeep"}
+              | ({"lock.json"} if key else set()) | ({"admin.bin"} if admin_pw else set()))
     for old in out_dir.iterdir():           # eski aylar ve diğer kipin (düz/şifreli) dosyaları
         if old.is_file() and old.name not in wanted:
             old.unlink()
@@ -227,10 +258,14 @@ def export_site(db: DB, cfg: dict, out_dir: Path | None = None, password: str | 
         "last": items[0]["d"] if items else None,
         "sources": sources,
         "months": months,
+        "briefs": {"n": len(briefs), "file": f"briefs.{ext}",
+                   "latest": ({k: briefs[0][k] for k in ("id", "k", "per", "o", "t", "c")} if briefs else None)},
     }
     _write(out_dir / f"manifest.{ext}", pack(manifest))
     if key:   # tarayıcının anahtarı türetmesi için gerekenler (gizli değil)
         _write(out_dir / "lock.json", _dump({"v": 1, "kdf": "PBKDF2-SHA256", "iter": vault.ITERATIONS,
-                                              "salt": vault.b64(salt), "cipher": "AES-256-GCM+deflate"}))
+                                              "salt": vault.b64(salt), "cipher": "AES-256-GCM+deflate",
+                                              "admin": bool(admin_pw)}))
     manifest["locked"] = bool(key)
+    manifest["admin"] = bool(admin_pw)
     return manifest

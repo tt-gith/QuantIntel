@@ -8,7 +8,7 @@ import { rangeBounds, resetFilters, state, update } from "../state.js";
 
 let onLang = () => {};
 
-export function renderTopbar(root, { onLangChange, locked = false }) {
+export function renderTopbar(root, { onLangChange, locked = false, admin = false, onAdmin = null }) {
   onLang = onLangChange;
   root.innerHTML = `
     <a class="brand" href="./" data-home>
@@ -39,9 +39,11 @@ export function renderTopbar(root, { onLangChange, locked = false }) {
     <div class="lang" role="group" aria-label="${esc(tt("lang.label"))}">
       ${LANGS.map((l) => `<button type="button" data-lang="${l}" aria-pressed="${l === getLang()}">${l.toUpperCase()}</button>`).join("")}
     </div>
+    ${admin ? `<button type="button" class="admin-btn" data-admin>${icon("admin")}<span>${esc(tt("admin.open"))}</span></button>` : ""}
     ${locked ? `<button type="button" class="lock-btn" data-lock title="${esc(tt("gate.lock"))}" aria-label="${esc(tt("gate.lock"))}">${icon("lock")}</button>` : ""}`;
 
   root.querySelector("[data-lock]")?.addEventListener("click", () => { forgetKey(); location.reload(); });
+  root.querySelector("[data-admin]")?.addEventListener("click", () => onAdmin?.());
 
   const pop = root.querySelector("#range-pop");
   const customBtn = root.querySelector('[data-range="custom"]');

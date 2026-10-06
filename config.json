@@ -4,6 +4,8 @@
   "log_dir": "logs",
   "lookback_days": 7,
   "site_port": 8765,
+  "site_url": "",
+  "utc_offset_hours": 3,
   "user_agent": "windows:quant-intel-network:1.0 (personal RSS reader)",
   "resolve_quantocracy_redirects": true,
   "sources": {
@@ -100,6 +102,74 @@
       "enabled": true,
       "max_age_days": 365,
       "refresh_days": 3
+    }
+  },
+  "llm": {
+    "enabled": true,
+    "note": "Anahtarı tanımlı sağlayıcılar sırayla denenir. Model adları değişirse yalnızca bu listeyi güncelle.",
+    "max_minutes": 18,
+    "providers": [
+      {
+        "name": "gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "key_env": "GEMINI_API_KEY",
+        "models": {
+          "brief": [
+            "gemini-3.8-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite"
+          ],
+          "translate": [
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash"
+          ]
+        },
+        "min_interval_seconds": 7,
+        "max_output_tokens": 8000,
+        "extra": {
+          "reasoning_effort": "low"
+        }
+      },
+      {
+        "name": "groq",
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_env": "GROQ_API_KEY",
+        "models": {
+          "brief": [
+            "openai/gpt-oss-120b"
+          ],
+          "translate": [
+            "openai/gpt-oss-120b"
+          ]
+        },
+        "min_interval_seconds": 62,
+        "max_output_tokens": 3500,
+        "extra": {
+          "reasoning_effort": "low"
+        }
+      }
+    ],
+    "translate": {
+      "enabled": true,
+      "max_age_days": 45,
+      "max_requests_per_run": 12,
+      "max_items_per_request": 12,
+      "max_chars_per_request": 4500,
+      "max_output_tokens": 8000
+    },
+    "briefs": {
+      "daily": true,
+      "weekly": true,
+      "daily_min_items": 4,
+      "weekly_min_items": 6,
+      "daily_max_items": 16,
+      "weekly_max_items": 28,
+      "daily_words": 450,
+      "weekly_words": 650,
+      "max_input_chars": 10000,
+      "max_output_tokens": 8000,
+      "site_limit": 200
     }
   }
 }

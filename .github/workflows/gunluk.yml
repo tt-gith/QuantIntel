@@ -1,11 +1,17 @@
-# Her gün kaynakları çeker, arşivi günceller ve siteyi GitHub Pages'te yayınlar.
+# Her gün kaynakları çeker, yeni içeriği çevirip özetler, arşivi günceller ve siteyi GitHub Pages'te yayınlar.
 # Elle çalıştırmak için: GitHub > Actions > "Günlük çekme ve yayın" > Run workflow
+# Aynı iş akışı yönetim panelinin komutlarını da uygular ("komut" girdisi doluysa kaynak çekilmez).
 name: Günlük çekme ve yayın
 
 on:
   schedule:
     - cron: "17 5 * * *"        # her gün 08:17 (İstanbul). GitHub birkaç dakika geciktirebilir.
-  workflow_dispatch:            # elle çalıştırma düğmesi
+  workflow_dispatch:            # elle çalıştırma düğmesi + yönetim paneli
+    inputs:
+      komut:
+        description: "Yönetim panelinin ürettiği şifreli komut (normal çalışma için boş bırak)"
+        required: false
+        default: ""
   push:
     branches: [main]            # kod değişince siteyi hemen yenile
     paths: ["qin/**", "site/**", "config.json", "requirements.txt", ".github/workflows/**"]
@@ -27,12 +33,23 @@ env:
   QIN_SITE_PASSWORD: ${{ secrets.SITE_SIFRESI }}
   QIN_SITE_PASSWORD_OLD: ${{ secrets.SITE_SIFRESI_ESKI }}   # yalnızca parola değiştirirken
   QIN_REQUIRE_PASSWORD: "1"     # parolasız (şifresiz) veri asla yayınlanmaz
+  # --- Aşağıdakilerin hepsi isteğe bağlıdır; tanımlı olmayan özellik sessizce atlanır (bkz. YAYIN.md) ---
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}             # çeviri ve otomatik özet (ücretsiz)
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}                 # yedek LLM (ücretsiz)
+  QIN_ADMIN_PASSWORD: ${{ secrets.ADMIN_SIFRESI }}          # yönetim paneli parolası
+  QIN_ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}               # panelin bu iş akışını başlatması için
+  QIN_ADMIN_COMMAND: ${{ inputs.komut }}                    # şifreli gelir; günlükte okunamaz
+  SMTP_USER: ${{ secrets.SMTP_USER }}                       # özet e-postalarını gönderen hesap
+  SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+  SMTP_HOST: ${{ vars.SMTP_HOST }}                          # boşsa smtp.gmail.com
+  SMTP_PORT: ${{ vars.SMTP_PORT }}                          # boşsa 587
   SAY: import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute("select count(*) from items").fetchone()[0])
+  TOPLA: import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("pragma wal_checkpoint(truncate)"); c.close()
 
 jobs:
   cek-ve-yayinla:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     environment:
       name: github-pages
       url: ${{ steps.yayin.outputs.page_url }}
@@ -45,6 +62,12 @@ jobs:
             echo "tamam=hayir" >> "$GITHUB_OUTPUT"
           elif [ "${#QIN_SITE_PASSWORD}" -lt 12 ]; then
             echo "::error::SITE_SIFRESI en az 12 karakter olmalı (dört beş kelimelik bir cümle kullan)."
+            exit 1
+          elif [ -n "$QIN_ADMIN_PASSWORD" ] && [ "${#QIN_ADMIN_PASSWORD}" -lt 16 ]; then
+            echo "::error::ADMIN_SIFRESI en az 16 karakter olmalı (beş altı kelimelik bir cümle kullan)."
+            exit 1
+          elif [ -n "$QIN_ADMIN_PASSWORD" ] && [ "$QIN_ADMIN_PASSWORD" = "$QIN_SITE_PASSWORD" ]; then
+            echo "::error::ADMIN_SIFRESI, SITE_SIFRESI ile aynı olamaz."
             exit 1
           else
             echo "tamam=evet" >> "$GITHUB_OUTPUT"
@@ -80,16 +103,34 @@ jobs:
             echo "Arşiv henüz yok: ilk çalıştırma, sıfırdan başlanıyor."
           fi
 
-      - name: Kaynakları çek ve şifreli site verisini üret
+      - name: Kaynakları çek
+        if: steps.hazir.outputs.tamam == 'evet' && env.QIN_ADMIN_COMMAND == ''
+        run: python run.py fetch
+
+      # LLM anahtarı yoksa ya da sağlayıcıya ulaşılamazsa bu adım hata vermez; site yine güncellenir.
+      - name: Çevir ve özetle (LLM)
+        if: steps.hazir.outputs.tamam == 'evet' && env.QIN_ADMIN_COMMAND == ''
+        timeout-minutes: 30         # ücretsiz katmanlar yavaş olabilir; süre dolarsa kalan iş yarına kalır
+        continue-on-error: true
+        run: python run.py llm
+
+      # Komut uygulanamazsa (süresi dolmuş, e-posta ayarsız...) iş durmaz: arşiv ve site yine yayınlanır,
+      # sonuç yönetim panelinde görünür.
+      - name: Yönetim komutunu uygula
+        if: steps.hazir.outputs.tamam == 'evet' && env.QIN_ADMIN_COMMAND != ''
+        run: python run.py admin || echo "::warning::Yönetim komutu tam uygulanamadı; ayrıntı yönetim panelinde."
+
+      - name: Site verisi şifreli mi?
         if: steps.hazir.outputs.tamam == 'evet'
         run: |
-          python run.py fetch
           test -f site/data/lock.json                 # veri şifreli üretilmiş olmalı
           test ! -e site/data/manifest.json           # düz veri kalmamalı
+          test ! -e site/data/briefs.json
 
       - name: Arşivi şifrele ve kaydet
         if: steps.hazir.outputs.tamam == 'evet'
         run: |
+          python -c "$TOPLA" data/quant_intel.db      # yarıda kesilen bir adım olduysa bekleyen yazmaları dosyaya işle
           yeni=$(python -c "$SAY" data/quant_intel.db)
           eski=0
           [ -f data/onceki.db ] && eski=$(python -c "$SAY" data/onceki.db)

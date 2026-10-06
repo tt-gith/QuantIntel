@@ -4,16 +4,18 @@ import { esc, fmtDate, fmtNum, relDays } from "../format.js";
 import { itemText, topicLabel, tt } from "../i18n.js";
 import { icon } from "../icons.js";
 import { isLiked, likeCount, toggleLike } from "../likes.js";
+import { buildExport, copyText, downloadText } from "../llmexport.js";
 import { resetFilters, state, update } from "../state.js";
 import { signals, sourceChips } from "./parts.js";
 
 let sourceMap = new Map();
 let current = [];
+let manifestRef = null;
 let observer = null;
 
-export function renderTabs(root, view) {
+export function renderTabs(root, view, manifest) {
   root.innerHTML = TABS.map((t) => {
-    const n = view.tabCounts.get(t.id) || 0;
+    const n = t.view === "briefs" ? (manifest.briefs?.n ?? 0) : view.tabCounts.get(t.id) || 0;
     return `<button type="button" role="tab" data-tab="${t.id}" aria-selected="${t.id === state.tab}"
               class="${n ? "" : "none"}">${esc(tt(`tab.${t.id}`))}<span>${fmtNum(n)}</span></button>`;
   }).join("");
@@ -36,10 +38,54 @@ export function renderToolbar(root, view) {
   }
   root.innerHTML = `
     <div class="tb-left"><strong>${esc(tt("results", { n: fmtNum(view.list.length) }))}</strong>${chips.join("")}</div>
-    <div class="sort" role="group" aria-label="${esc(tt("sort.label"))}">
-      <span>${esc(tt("sort.label"))}</span>
-      ${SORTS.map((s) => `<button type="button" data-sort="${s}" aria-pressed="${s === state.sort}">${esc(tt(`sort.${s}`))}</button>`).join("")}
+    <div class="tb-right">
+      <div class="llm">
+        <button type="button" class="tb-btn" data-llm aria-expanded="false" aria-controls="llm-pop"
+                ${view.list.length ? "" : "disabled"} title="${esc(tt("export.hint"))}">
+          ${icon("export")}<span>${esc(tt("export.button"))}</span>
+        </button>
+        <div class="llm-pop" id="llm-pop" hidden>
+          <h3>${esc(tt("export.title"))}</h3>
+          <p>${esc(tt("export.text", { n: fmtNum(view.list.length) }))}</p>
+          <p class="llm-size" data-llm-size></p>
+          <div class="llm-actions">
+            <button type="button" data-llm-copy>${icon("copy")}${esc(tt("export.copy"))}</button>
+            <button type="button" data-llm-download>${icon("export")}${esc(tt("export.download"))}</button>
+          </div>
+          <p class="llm-msg" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <div class="sort" role="group" aria-label="${esc(tt("sort.label"))}">
+        <span>${esc(tt("sort.label"))}</span>
+        ${SORTS.map((s) => `<button type="button" data-sort="${s}" aria-pressed="${s === state.sort}">${esc(tt(`sort.${s}`))}</button>`).join("")}
+      </div>
     </div>`;
+}
+
+// "LLM için dışa aktar" kutusu: görünümün tamamını (yalnızca ekrandaki sayfayı değil) metne çevirir.
+function exportBox(toolbar, e) {
+  const pop = toolbar.querySelector("#llm-pop");
+  const btn = toolbar.querySelector("[data-llm]");
+  if (!pop) return false;
+  const close = () => { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+  if (!e) { close(); return false; }
+  if (e.target.closest("[data-llm]")) {
+    if (!pop.hidden) { close(); return true; }
+    const { text } = buildExport(current, manifestRef);
+    pop.querySelector("[data-llm-size]").textContent =
+      tt("export.size", { chars: fmtNum(text.length), tokens: fmtNum(Math.round(text.length / 3.2 / 100) * 100) });
+    pop.querySelector(".llm-msg").textContent = "";
+    pop.hidden = false; btn.setAttribute("aria-expanded", "true");
+    return true;
+  }
+  const copy = e.target.closest("[data-llm-copy]");
+  const save = e.target.closest("[data-llm-download]");
+  if (!copy && !save) return !!e.target.closest(".llm-pop");
+  const { text, name } = buildExport(current, manifestRef);
+  const msg = pop.querySelector(".llm-msg");
+  if (save) { downloadText(text, name); msg.textContent = tt("export.saved", { name }); }
+  else copyText(text).then((ok) => { msg.textContent = tt(ok ? "export.copied" : "export.failed"); });
+  return true;
 }
 
 function row(item) {
@@ -87,6 +133,7 @@ function row(item) {
 
 export function renderFeed(root, endRoot, view, manifest) {
   sourceMap = new Map(manifest.sources.map((s) => [s.id, s]));
+  manifestRef = manifest;
   current = view.list;
   observer?.disconnect();
 
@@ -137,7 +184,10 @@ export function bindFeed({ tabs, toolbar, feed, end }) {
     const b = e.target.closest("[data-tab]");
     if (b) update({ tab: b.dataset.tab, shown: 0 });
   });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".llm")) exportBox(toolbar, null); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") exportBox(toolbar, null); });
   toolbar.addEventListener("click", (e) => {
+    if (exportBox(toolbar, e)) return;
     const sort = e.target.closest("[data-sort]");
     if (sort) return update({ sort: sort.dataset.sort, shown: 0 });
     const topic = e.target.closest("[data-drop-topic]");

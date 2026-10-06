@@ -13,6 +13,7 @@ export const state = {
   to: null,
   sort: "new",
   shown: 0,
+  brief: null,          // Özetler sekmesinde açık olan özetin kimliği (null = en yenisi)
 };
 
 const listeners = new Set();
@@ -25,7 +26,7 @@ export function update(patch, { silent = false } = {}) {
 }
 
 export function resetFilters() {
-  update({ tab: "all", src: new Set(), topics: new Set(), q: "" });
+  update({ tab: "all", src: new Set(), topics: new Set(), q: "", brief: null });
 }
 
 // Seçili aralığın tarih sınırları (Date ya da null).
@@ -47,6 +48,7 @@ function writeHash() {
   if (state.range === "custom") { p.set("from", state.from); p.set("to", state.to); }
   else if (state.range !== DEFAULT_RANGE) p.set("range", state.range);
   if (state.sort !== "new") p.set("sort", state.sort);
+  if (state.tab === "briefs" && state.brief) p.set("brief", state.brief);
   const hash = p.toString();
   history.replaceState(null, "", hash ? `#${hash}` : location.pathname + location.search);
 }
@@ -59,6 +61,7 @@ export function readHash() {
   state.topics = new Set((p.get("topic") || "").split("|").filter(Boolean));
   state.q = p.get("q") || "";
   state.sort = SORTS.includes(p.get("sort")) ? p.get("sort") : "new";
+  state.brief = /^\d+$/.test(p.get("brief") || "") ? +p.get("brief") : null;
   if (day.test(p.get("from") || "") && day.test(p.get("to") || "")) {
     state.range = "custom"; state.from = p.get("from"); state.to = p.get("to");
   } else {

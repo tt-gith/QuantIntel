@@ -1,4 +1,5 @@
-"""SQLite depolama: ham kayıtlar (posts), tekil içerikler (items), çekme günlüğü."""
+"""SQLite depolama: ham kayıtlar (posts), tekil içerikler (items), özetler (briefs), çekme günlüğü.
+Abone adresleri burada değil, qin/private.py'deki şifreli kayıtta tutulur."""
 from __future__ import annotations
 
 import sqlite3
@@ -63,6 +64,21 @@ CREATE TABLE IF NOT EXISTS meta (
     key         TEXT PRIMARY KEY,
     value       TEXT
 );
+CREATE TABLE IF NOT EXISTS briefs (
+    id          INTEGER PRIMARY KEY,
+    kind        TEXT NOT NULL,      -- daily | weekly
+    period      TEXT NOT NULL,      -- günlük: 2026-10-06, haftalık: 2026-W41
+    origin      TEXT NOT NULL,      -- llm (otomatik) | manual (yönetim panelinden)
+    title       TEXT NOT NULL,
+    body        TEXT NOT NULL,      -- Markdown
+    model       TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT,
+    sent_at     TEXT,               -- abonelere gönderildiği an (boşsa gönderilmedi)
+    sent_to     INTEGER,
+    draft_id    TEXT                -- paneldeki taslağın kimliği: aynı taslak iki kez eklenmesin
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_briefs_llm ON briefs(kind, period) WHERE origin = 'llm';
 CREATE TABLE IF NOT EXISTS fetch_log (
     id          INTEGER PRIMARY KEY,
     source      TEXT NOT NULL,
@@ -190,6 +206,49 @@ class DB:
              iso(now_utc())),
         )
         return cur.lastrowid if cur.rowcount > 0 else None
+
+    # ------------------------------------------------------------ özetler
+    def save_brief(self, kind: str, period: str, origin: str, title: str, body: str,
+                   model: str | None = None, brief_id: int | None = None, draft_id: str | None = None) -> int:
+        """Özet ekler; brief_id verilirse o özeti günceller. Kimliğini döndürür."""
+        now = iso(now_utc())
+        if brief_id is not None:
+            cur = self.conn.execute(
+                "UPDATE briefs SET kind=?, period=?, title=?, body=?, updated_at=? WHERE id=?",
+                (kind, period, title, body, now, brief_id))
+            if not cur.rowcount:
+                raise ValueError(f"Özet bulunamadı: #{brief_id}")
+        else:
+            brief_id = self.conn.execute(
+                "INSERT INTO briefs(kind, period, origin, title, body, model, created_at, draft_id) "
+                "VALUES (?,?,?,?,?,?,?,?)", (kind, period, origin, title, body, model, now, draft_id)).lastrowid
+        self.conn.commit()
+        return brief_id
+
+    def brief(self, brief_id: int) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM briefs WHERE id=?", (brief_id,)).fetchone()
+
+    def find_brief(self, kind: str, period: str, origin: str = "llm") -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM briefs WHERE kind=? AND period=? AND origin=? ORDER BY id DESC LIMIT 1",
+            (kind, period, origin)).fetchone()
+
+    def find_draft(self, draft_id: str) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM briefs WHERE draft_id=? ORDER BY id DESC LIMIT 1",
+                                 (draft_id,)).fetchone()
+
+    def briefs(self, limit: int | None = None) -> list[sqlite3.Row]:
+        q = "SELECT * FROM briefs ORDER BY created_at DESC, id DESC"
+        return self.conn.execute(q + (" LIMIT ?" if limit else ""), (limit,) if limit else ()).fetchall()
+
+    def delete_brief(self, brief_id: int) -> bool:
+        cur = self.conn.execute("DELETE FROM briefs WHERE id=?", (brief_id,))
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def mark_brief_sent(self, brief_id: int, count: int) -> None:
+        self.conn.execute("UPDATE briefs SET sent_at=?, sent_to=? WHERE id=?", (iso(now_utc()), count, brief_id))
+        self.conn.commit()
 
     def log_fetch(self, source: str, ok: bool, new_posts=0, new_items=0, error=None):
         self.conn.execute(

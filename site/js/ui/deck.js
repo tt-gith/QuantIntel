@@ -1,6 +1,6 @@
 // Uçuş güvertesi: sitenin tanımı, görev saati ve seçili aralığın öne çıkan içerikleri.
-import { SPOTLIGHT_GROUPS, SPOTLIGHT_SIZE } from "../config.js";
-import { esc, fmtDate, fmtElapsed, relDays } from "../format.js";
+import { BRIEF_TEASER_DAYS, SPOTLIGHT_GROUPS, SPOTLIGHT_SIZE } from "../config.js";
+import { DAY, esc, fmtDate, fmtElapsed, relDays } from "../format.js";
 import { itemText, tt } from "../i18n.js";
 import { state } from "../state.js";
 import { signals, sourceChips } from "./parts.js";
@@ -55,6 +55,20 @@ function runner({ item, label }, sourceMap) {
     </li>`;
 }
 
+// En yeni özet tazeyse başlığın altında tek satırlık bir çağrı (Özetler sekmesine götürür).
+function teaser(manifest) {
+  const b = manifest.briefs?.latest;
+  if (!b || state.tab === "briefs") return "";
+  const date = new Date(b.c);
+  if (Date.now() - date.getTime() > BRIEF_TEASER_DAYS * DAY) return "";
+  return `
+    <button type="button" class="teaser" data-open-brief="${b.id}">
+      <span class="teaser-k">${esc(tt(`brief.kind.${b.k}`))} · ${esc(relDays(date) ?? fmtDate(date))}</span>
+      <span class="teaser-t">${esc(b.t)}</span>
+      <span class="teaser-go">${esc(tt("brief.read"))}</span>
+    </button>`;
+}
+
 export function renderDeck(root, view, manifest) {
   const sourceMap = new Map(manifest.sources.map((s) => [s.id, s]));
   const generated = new Date(manifest.generated);
@@ -67,6 +81,7 @@ export function renderDeck(root, view, manifest) {
         <div class="deck-copy">
           <h1>${esc(tt("deck.title"))}</h1>
           <p>${esc(tt("deck.lead", { n: manifest.sources.length }))}</p>
+          ${teaser(manifest)}
         </div>
         <div class="clock" title="${esc(generated.toLocaleString())}">
           <div class="clock-read"><span class="clock-t">T+</span><span id="clock">00:00:00</span></div>

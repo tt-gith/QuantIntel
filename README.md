@@ -1,21 +1,23 @@
 # Quant Intelligence Network
 
-Quant kaynaklarını (QuantSeeker, Quantocracy, Systematic Traders, OpenQuant, Quantpedia,
-r/algotrading, arXiv q-fin) her gün çeker, tek tek içeriklere ayırır, yerel bir SQLite arşivine
-kaydeder ve bunları bir web sitesi olarak sunar. Yol haritası: `ROADMAP.md`. Siteyi internette yayınlamak
-(bilgisayar kapalıyken de çalışsın, her yerden erişilsin): `YAYIN.md`.
+Quant kaynaklarını (QuantSeeker, Quantocracy, Quantpedia, IBKR Quant, Top Traders Unplugged,
+Flirting with Models, r/algotrading, arXiv q-fin) her gün çeker, tek tek içeriklere ayırır, bir SQLite
+arşivine kaydeder ve bunları bir web sitesi olarak sunar. İsteğe bağlı olarak içeriği Türkçeye çevirir,
+günlük ve haftalık özet yazar, özetleri abonelere e-postalar. Yol haritası: `ROADMAP.md`.
+Siteyi internette yayınlamak ve ek özellikleri açmak: `YAYIN.md`.
 
 ## Önceki sürümden yükseltme
 
-1. Zip'i mevcut klasörün **üstüne** çıkar (dosyaların üzerine yazılsın). `data\` klasörün, yani arşivin
-   olduğu gibi kalır. `config.json` yenilenir; elle değiştirdiğin bir ayar varsa yeniden gir.
-2. Klasörde bir komut penceresi aç ve `qin fetch` çalıştır. İlk çalıştırmada arşiv yeni sürüme taşınır
-   (bültenler kayıtlı ham veriden yeniden ayrıştırılır; öğe numaraları ve işaretlerin korunur),
-   popülerlik verileri çekilir ve site verisi üretilir.
-3. `site_ac.bat` ile siteyi aç.
+Site GitHub'da yayındaysa:
 
-Yeni Python paketi gerekmiyor. Zamanlanmış görevler aynen çalışmaya devam eder; günlük çekme artık
-site verisini de günceller.
+1. Zip'i depo klasörünün **üstüne** çıkar (dosyaların üzerine yazılsın). `config.json` yenilenir;
+   elle değiştirdiğin bir ayar varsa yeniden gir.
+2. Klasörde komut penceresi: `git add .` → `git commit -m "v6"` → `git push`.
+   İş akışı kendiliğinden çalışır, site birkaç dakikada yenilenir. Arşive dokunulmaz.
+3. Yeni özellikler (çeviri, özet, yönetim paneli, e-posta) gizli değerleri eklenince açılır: `YAYIN.md` 7–9.
+
+Yalnızca bu bilgisayarda kullanıyorsan: zip'i klasörün üstüne çıkar, `qin fetch` çalıştır, `site_ac.bat` ile aç.
+Yeni Python paketi gerekmiyor.
 
 ## İlk kurulum (Windows 10)
 
@@ -42,7 +44,15 @@ site verisini de günceller.
 - **Tarih aralığı (sağ üst):** 7 gün (varsayılan), 30 gün, 90 gün, Tümü ya da özel aralık.
 - **Sıralama:** en yeni ya da en popüler. Popülerlik rozetleri: oy ve yorum (Reddit), atıf (makaleler),
   kaç kaynakta geçtiği, "çok tıklanan" işareti ve 0–100 popülerlik çubuğu.
-- **Dil:** arayüz TR/EN. İçerik çevirileri sonraki aşamada eklenecek; altyapısı hazır.
+- **Dil:** arayüz TR/EN. LLM anahtarı tanımlıysa içerik başlık ve özetleri de Türkçeye çevrilir;
+  çevrilmiş öğe «çeviri» rozeti taşır, EN seçiliyken özgün metin görünür.
+- **Özetler sekmesi:** günlük ve haftalık özetler. Otomatik olanları bir dil modeli yalnızca arşivdeki
+  içeriğe dayanarak yazar ve her iddiada içeriğin numarasını verir; numara kaynağa götürür.
+  En yeni özet güvertede tek satırlık bir çağrıyla da görünür.
+- **LLM için dışa aktar (araç çubuğu):** ekrandaki görünümü (tarih aralığı, sekme, filtreler, arama)
+  hazır bir özet isteğiyle birlikte tek metne çevirir; kopyala ya da dosya olarak indir, istediğin modele ver.
+- **Yönetim paneli (yalnızca yayındaki sitede, ikinci parolayla):** özet yazma ve düzenleme, abone listesi,
+  «Özeti yayınla» ile e-posta gönderimi, kurulum durumu. Kurulum: `YAYIN.md` 8–9.
 - **Paylaşılabilir görünüm:** seçtiğin sekme, kaynak, tarih ve arama adres çubuğuna yazılır.
 - **Beğeni:** şimdilik yalnızca o tarayıcıda tutulur; ortak beğeniler bulut aşamasında gelecek.
 
@@ -61,7 +71,17 @@ qin mark 123 ilginç --note "dene"       :: öğeyi işaretle (sitede rozet olar
 qin radar                               :: işaretlediklerini listele
 qin stats                               :: arşiv boyutu ve kaynak durumu
 qin weekly                              :: çek + eski tip haftalık özet (digests\latest.html)
+qin llm                                 :: yeni içeriği çevir, dönemi gelen özetleri yaz (API anahtarı gerekir)
+qin llm --brief weekly --force          :: haftalık özeti yeniden yazdır
+qin brief list                          :: özetleri listele
+qin brief add ozet.md --kind weekly     :: Markdown dosyasından özet ekle (ilk satır "# Başlık")
+qin brief send 12                       :: 12 numaralı özeti abonelere e-postala
+qin sub add ad@ornek.com                :: abone ekle (sub list / sub remove)
 ```
+
+`qin llm` için anahtar, `qin brief send` için e-posta ayarları ortam değişkeni olarak verilir
+(`set GEMINI_API_KEY=...`, `set SMTP_USER=...`, `set SMTP_PASSWORD=...`). Yayındaki sitede bunların
+hepsi GitHub'da çalışır; yerel komutlar yalnızca bu bilgisayardaki arşivi etkiler.
 
 ## Proje yapısı
 
@@ -73,20 +93,30 @@ qin\                 veri katmanı (Python)
   enrich.py            tür, konu etiketi ve araç sinyali kuralları
   metrics.py           dış popülerlik ölçümleri (atıf sayısı)
   cluster.py           aynı içeriğin kopyalarını birleştirme
-  export.py            arşiv → site\data\*.json
+  export.py            arşiv → site\data\* (yayında şifreli)
   storage.py           SQLite şeması
+  llm.py               ücretsiz LLM sağlayıcılarına tek arayüz (sırayla dener)
+  translate.py         başlık ve özetlerin Türkçeye çevrilmesi
+  brief.py             günlük ve haftalık özetlerin yazdırılması
+  md.py                özetler için küçük, güvenli Markdown çevirici (e-posta)
+  mailer.py            özetlerin abonelere gönderilmesi (SMTP)
+  admin.py             yönetim paketi (admin.bin) ve panel komutlarının uygulanması
+  private.py           abone adresleri: arşiv içinde yönetim parolasıyla şifreli kayıt
+  vault.py             site verisinin ve arşivin parolayla şifrelenmesi
 site\                web sitesi (derleme adımı yok; dosyayı değiştir, sayfayı yenile)
   index.html
   css\tokens.css       renkler, yazı tipleri, ölçüler (görünümün tek adresi)
   css\app.css          yerleşim ve bileşenler
   js\config.js         sekmeler, tarih seçenekleri, popülerlik ölçümleri, vitrin grupları
-  js\ui\               üst çubuk, güverte (başlık + öne çıkanlar), sol menü, liste
+  js\ui\               üst çubuk, güverte, sol menü, liste, özetler (briefs.js), yönetim paneli (admin.js)
+  js\md.js             özetler için Markdown çevirici (qin\md.py ile aynı kurallar)
+  js\llmexport.js      "LLM için dışa aktar" metni
+  js\github.js         panelin iş akışını başlatması ve izlemesi
   js\fx\starfield.js   yıldız alanı
   i18n\tr.js, en.js    arayüz metinleri
   data\                qin export'un ürettiği veri (elle düzenlenmez)
 data\quant_intel.db  arşiv (yedeklemek için kopyalaman yeterli)
-.github\workflows\   GitHub'da her gün çalışan iş akışı (çek, arşivle, şifrele, yayınla)
-qin\vault.py          site verisinin ve arşivin parolayla şifrelenmesi
+.github\workflows\   GitHub'da her gün çalışan iş akışı (çek, çevir, özetle, arşivle, şifrele, yayınla)
 tests\               internet gerektirmeyen testler
 ```
 
@@ -112,6 +142,12 @@ yeniden hesaplanır; `qin export` sonrası eski içeriklere de yansır.
 
 **Yeni dil:** `site\i18n\tr.js`'i kopyalayıp çevir, `site\js\config.js` → `LANGS`'e ekle.
 
+**LLM sağlayıcısı ya da modeli:** `config.json` → `llm.providers`. OpenAI uyumlu her uç nokta eklenebilir
+(adres, model listesi, anahtarın ortam değişkeni). Sıradaki ilk yanıt veren kullanılır.
+
+**Özetin üslubu, uzunluğu, bölümleri:** `qin\brief.py` → `SYSTEM`; sayılar `config.json` → `llm.briefs`.
+"LLM için dışa aktar"daki hazır istek: `site\i18n\tr.js` → `export.prompt`.
+
 **Görünüm:** renk ve yazı tipleri `site\css\tokens.css` içindeki değişkenlerdir.
 
 **Üstteki başlık ve tanıtım cümlesi:** `site\i18n\tr.js` → `deck.title` ve `deck.lead`.
@@ -124,6 +160,12 @@ Yayınlanan sitede içerik dosyaları şifrelidir; site açılışta parolayı s
 Yerelde (`site_ac.bat`) parola yoktur, veri düz yazılır. Şifreleme yalnızca `QIN_SITE_PASSWORD` ortam
 değişkeni tanımlıyken devreye girer; GitHub'daki iş akışı bunu `SITE_SIFRESI` gizli ayarından alır.
 
+İkinci bir parola (`ADMIN_SIFRESI`) tanımlıysa site verisinin yanına `admin.bin` yazılır. Bu parolayla
+giren kişi yönetim panelini görür. Panel bir şeyi doğrudan değiştiremez: işlemi yönetim anahtarıyla
+şifreleyip günlük iş akışına girdi olarak yollar, iş akışı komutu çözer ve arşive uygular. Abone
+adresleri arşivin içinde yönetim parolasıyla ayrıca şifrelenir (`qin\private.py`): site parolasını bilen
+biri arşivi açsa da adresleri okuyamaz. Adresler iş akışı günlüklerine de yazılmaz.
+
 ## Veritabanı
 
 | Tablo | İçerik |
@@ -132,8 +174,9 @@ değişkeni tanımlıyken devreye girer; GitHub'daki iş akışı bunu `SITE_SIF
 | `items` | Tekil içerikler: başlık, link, yayıncı/yazarlar, bölüm, tür, özet, etiketler, durum, not |
 | `metrics` | Öğe başına popülerlik ölçümleri (`up`, `cm`, `cit`, `hot`, ileride `likes`, `views`) |
 | `translations` | Öğe başına çeviriler (dil, başlık, özet) |
+| `briefs` | Günlük ve haftalık özetler (otomatik ya da elle), e-postayla gönderilme durumu |
 | `fetch_log` | Her çekmenin sonucu |
-| `meta` | Sürüm ve kaynak renk yuvaları |
+| `meta` | Sürüm, kaynak renk yuvaları, son LLM çalışması; `private`: abone adresleri ve son yönetim işlemi (yönetim parolasıyla ayrıca şifreli) |
 
 ## Bilinen sınırlar
 
@@ -144,6 +187,10 @@ değişkeni tanımlıyken devreye girer; GitHub'daki iş akışı bunu `SITE_SIF
 - Bir bültenin birden çok sayısında geçen içerik, ilk göründüğü sayının tarihini taşır.
 - Araç sinyali ve konu etiketleri anahtar kelime kurallarıdır; yanlış eşleşmeler olabilir.
 - SSRN ve konferans takvimleri kapsam dışı (API yok).
+- Çeviri ve özetler bir dil modelinin çıktısıdır; hata içerebilir. Model yalnızca başlık ve özetleri görür,
+  içeriğin tam metnini okumaz.
+- Yönetim panelindeki her işlem bir iş akışı çalıştırır; sonuç iki üç dakikada görünür.
+- Abonelik kendi kendine yapılamaz; adresleri yönetici ekler.
 
 ## Test
 

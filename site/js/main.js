@@ -1,10 +1,12 @@
 // Giriş noktası: veriyi yükler, filtreleri uygular, parçaları çizer.
 import { TABS } from "./config.js";
-import { detectLock, isLocked, loadManifest, loadRange, unlockFromStore } from "./data.js";
+import { adminInfo, detectLock, isLocked, loadBriefs, loadManifest, loadRange, unlockFromStore } from "./data.js";
 import { esc } from "./format.js";
 import { savedLang, setLang, tt } from "./i18n.js";
-import { onChange, rangeBounds, readHash, state } from "./state.js";
+import { onChange, rangeBounds, readHash, state, update } from "./state.js";
 import { initStarfield } from "./fx/starfield.js";
+import { openAdmin, resumeAdmin } from "./ui/admin.js";
+import { bindBriefs, renderBriefList, renderBriefReader } from "./ui/briefs.js";
 import { renderDeck } from "./ui/deck.js";
 import { bindFeed, renderFeed, renderTabs, renderToolbar } from "./ui/feed.js";
 import { askPassword } from "./ui/gate.js";
@@ -49,14 +51,23 @@ function compute(items) {
 
 async function refresh() {
   const mine = ++seq;
+  const briefsView = state.tab === "briefs";              // Özetler: liste yerine okuma görünümü
   const { from, to } = rangeBounds();
-  const items = await loadRange(from, to);
+  const [items, briefs] = await Promise.all([loadRange(from, to), briefsView ? loadBriefs().catch(() => []) : null]);
   if (mine !== seq) return;                               // daha yeni bir istek geldi
   const view = compute(items);
+  document.body.classList.toggle("view-briefs", briefsView);
+  for (const id of ["toolbar", "feed", "feed-end"]) $(id).hidden = briefsView;
+  $("briefs").hidden = !briefsView;
   syncTopbar($("topbar"));
   renderDeck($("deck"), view, manifest);
+  renderTabs($("tabs"), view, manifest);
+  if (briefsView) {
+    renderBriefList($("side"), briefs);
+    renderBriefReader($("briefs"), briefs);
+    return;
+  }
   renderSide($("side"), view, manifest);
-  renderTabs($("tabs"), view);
   renderToolbar($("toolbar"), view);
   renderFeed($("feed"), $("feed-end"), view, manifest);
 }
@@ -64,6 +75,8 @@ async function refresh() {
 function drawChrome() {
   renderTopbar($("topbar"), {
     locked: isLocked(),
+    admin: !!adminInfo(),
+    onAdmin: () => openAdmin(),
     onLangChange: async (lang) => { await setLang(lang); drawChrome(); refresh(); },
   });
 }
@@ -85,6 +98,13 @@ async function boot() {
   }
   bindSide($("side"), manifest);
   bindFeed({ tabs: $("tabs"), toolbar: $("toolbar"), feed: $("feed"), end: $("feed-end") });
+  bindBriefs({ side: $("side"), main: $("briefs") });
+  $("deck").addEventListener("click", (e) => {            // güvertedeki "yeni özet" satırı
+    const b = e.target.closest("[data-open-brief]");
+    if (!b) return;
+    update({ tab: "briefs", brief: +b.dataset.openBrief });
+    $("main").scrollIntoView({ block: "start", behavior: "smooth" });
+  });
   await refresh();
   onChange(refresh);
   addEventListener("hashchange", () => { readHash(); refresh(); });
@@ -94,6 +114,7 @@ async function boot() {
   try { first = !sessionStorage.getItem("qin.launched"); sessionStorage.setItem("qin.launched", "1"); } catch { /* yoksay */ }
   document.body.classList.remove("is-booting");
   if (first) { document.body.classList.add("is-launching"); stars.launch(); }
+  if (adminInfo()) resumeAdmin();                         // işlem sonrası yenilemede panel kaldığı yerden açılır
 }
 
 boot();
